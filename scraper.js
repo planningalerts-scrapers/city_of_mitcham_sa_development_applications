@@ -36,7 +36,7 @@ function insertRow(database, developmentApplication) {
         developmentApplication.scrapeDate,
         null,
         null,
-        developmentApplication.onNoticeToDate
+        null
     ], function(error, row) {
         if (error)
             console.log(error);
@@ -72,28 +72,31 @@ function run(database) {
         // Use cheerio to find all development applications listed in the page.
  
         let $ = cheerio.load(body);
-        $("div.list-container a").each((index, element) => {
+        $("table.grid td a").each((index, element) => {
             // Each development application is listed with a link to another page which has the
             // full development application details.
 
-            let developmentApplicationUrl = new urlparser.URL(element.attribs.href, baseUrl).href;
-            requestPage(developmentApplicationUrl, body => {
-                // Extract the details of the development application from the development
-                // application page and then insert those details into the database as a row
-                // in a table.  Note that the selectors used below are based on those from the
-                // https://github.com/LoveMyData/burnside scraper.
+            console.log(element.attribs.href);
 
-                let $ = cheerio.load(body);
+            let applicationNumber = $(element).text().trim();
+            if (/^[0-9][0-9][0-9]\/[0-9][0-9][0-9][0-9]\/[0-9][0-9]$/.test(applicationNumber)) {
+                let developmentApplicationUrl = "https://eproperty.mitchamcouncil.sa.gov.au/T1PRProd/WebApps/eProperty/P1/eTrack/eTrackApplicationDetails.aspx?r=P1.WEBGUEST&f=%24P1.ETR.APPDET.VIW&ApplicationId=" + encodeURIComponent(applicationNumber);
+                requestPage(developmentApplicationUrl, body => {
+                    // Extract the details of the development application from the development
+                    // application page and then insert those details into the database as a row
+                    // in a table.
 
-                insertRow(database, {
-                    applicationNumber: $("span.field-label:contains('Application number') ~ span.field-value").text().trim(),
-                    address: $("span.field-label:contains('Address') ~ span.field-value").text().replace("View Map", "").trim(),
-                    reason: $("span.field-label:contains('Nature of development') ~ span.field-value").text().trim(),
-                    informationUrl: developmentApplicationUrl,
-                    commentUrl: CommentUrl,
-                    scrapeDate: moment().format("YYYY-MM-DD"),
-                    onNoticeToDate: moment($("h2.side-box-title:contains('Closing Date') + div").text().split(',')[0].trim(), "D MMMM YYYY", true).format("YYYY-MM-DD") });
-            });
+                    let $ = cheerio.load(body);
+
+                    // insertRow(database, {
+                    //     applicationNumber: $("span.field-label:contains('Application number') ~ span.field-value").text().trim(),
+                    //     address: $("span.field-label:contains('Address') ~ span.field-value").text().replace("View Map", "").trim(),
+                    //     reason: $("span.field-label:contains('Nature of development') ~ span.field-value").text().trim(),
+                    //     informationUrl: developmentApplicationUrl,
+                    //     commentUrl: CommentUrl,
+                    //    scrapeDate: moment().format("YYYY-MM-DD")
+                });
+            }
         });
     });
 }
