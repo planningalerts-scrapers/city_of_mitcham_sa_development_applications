@@ -5,7 +5,7 @@
 // 14th July 2018
 
 let cheerio = require("cheerio");
-let request = require("request");
+let request = require("request-promise-native");
 let sqlite3 = require("sqlite3").verbose();
 let urlparser = require("url");
 let moment = require("moment");
@@ -81,6 +81,7 @@ function run(database) {
             let applicationNumber = $(element).text().trim();
             if (/^[0-9][0-9][0-9]\/[0-9][0-9][0-9][0-9]\/[0-9][0-9]$/.test(applicationNumber)) {
                 let developmentApplicationUrl = "https://eproperty.mitchamcouncil.sa.gov.au/T1PRProd/WebApps/eProperty/P1/eTrack/eTrackApplicationDetails.aspx?r=P1.WEBGUEST&f=%24P1.ETR.APPDET.VIW&ApplicationId=" + encodeURIComponent(applicationNumber);
+                console.log(developmentApplicationUrl);
                 requestPage(developmentApplicationUrl, body => {
                     // Extract the details of the development application from the development
                     // application page and then insert those details into the database as a row
@@ -101,4 +102,14 @@ function run(database) {
     });
 }
 
-initializeDatabase(run);
+async function test() {
+    let body = await request(DevelopmentApplicationsUrl);
+    let $ = cheerio.load(body);
+    $("table.grid td a").each((index, element) => {
+        let applicationNumber = $(element).text().trim();
+        console.log(applicationNumber);
+    });
+}
+
+test();
+// initializeDatabase(run);
