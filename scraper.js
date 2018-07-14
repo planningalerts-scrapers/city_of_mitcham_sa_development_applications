@@ -15,101 +15,81 @@ const CommentUrl = "mailto:mitcham@mitchamcouncil.sa.gov.au";
 
 // Sets up an sqlite database.
 
-function initializeDatabase(callback) {
-    let database = new sqlite3.Database("data.sqlite");
-    database.serialize(() => {
-        database.run("create table if not exists [data] ([council_reference] text primary key, [address] text, [description] text, [info_url] text, [comment_url] text, [date_scraped] text, [date_received] text, [on_notice_from] text, [on_notice_to] text)");
-        callback(database);
+async function initializeDatabase() {
+    return new Promise((resolve, reject) => {
+        let database = new sqlite3.Database("data.sqlite");
+        database.serialize(() => {
+            database.run("create table if not exists [data] ([council_reference] text primary key, [address] text, [description] text, [info_url] text, [comment_url] text, [date_scraped] text, [date_received] text, [on_notice_from] text, [on_notice_to] text)");
+            resolve(database);
+        });
     });
 }
 
 // Inserts a row in the database if it does not already exist.
 
-function insertRow(database, developmentApplication) {
-    let sqlStatement = database.prepare("insert or ignore into [data] values (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    sqlStatement.run([
-        developmentApplication.applicationNumber,
-        developmentApplication.address,
-        developmentApplication.reason,
-        developmentApplication.informationUrl,
-        developmentApplication.commentUrl,
-        developmentApplication.scrapeDate,
-        null,
-        null,
-        null
-    ], function(error, row) {
-        if (error)
-            console.log(error);
-        else {
-            if (this.changes > 0)
-                console.log(`    Inserted new application \"${developmentApplication.applicationNumber}\" into the database.`);
-            sqlStatement.finalize();  // releases any locks
-        }
-    });
-}
-
-// Reads a page using a request.
-    
-function requestPage(url, callback) {
-    console.log(`Requesting page: ${url}`);
-    request(url, (error, response, body) => {
-        if (error)
-            console.log(`Error requesting page ${url}: ${error}`);
-        else
-            callback(body);
-    });
-}
-
-// Parses the page at the specified URL.
-
-function run(database) {
-    let url = DevelopmentApplicationsUrl;
-    let parsedUrl = new urlparser.URL(url);
-    let baseUrl = parsedUrl.origin + parsedUrl.pathname;
-
-    
-    requestPage(url, body => {
-        // Use cheerio to find all development applications listed in the page.
- 
-        let $ = cheerio.load(body);
-        $("table.grid td a").each((index, element) => {
-            // Each development application is listed with a link to another page which has the
-            // full development application details.
-
-            console.log(element.attribs.href);
-
-            let applicationNumber = $(element).text().trim();
-            if (/^[0-9][0-9][0-9]\/[0-9][0-9][0-9][0-9]\/[0-9][0-9]$/.test(applicationNumber)) {
-                let developmentApplicationUrl = "https://eproperty.mitchamcouncil.sa.gov.au/T1PRProd/WebApps/eProperty/P1/eTrack/eTrackApplicationDetails.aspx?r=P1.WEBGUEST&f=%24P1.ETR.APPDET.VIW&ApplicationId=" + encodeURIComponent(applicationNumber);
-                console.log(developmentApplicationUrl);
-                requestPage(developmentApplicationUrl, body => {
-                    // Extract the details of the development application from the development
-                    // application page and then insert those details into the database as a row
-                    // in a table.
-
-                    let $ = cheerio.load(body);
-
-                    // insertRow(database, {
-                    //     applicationNumber: $("span.field-label:contains('Application number') ~ span.field-value").text().trim(),
-                    //     address: $("span.field-label:contains('Address') ~ span.field-value").text().replace("View Map", "").trim(),
-                    //     reason: $("span.field-label:contains('Nature of development') ~ span.field-value").text().trim(),
-                    //     informationUrl: developmentApplicationUrl,
-                    //     commentUrl: CommentUrl,
-                    //    scrapeDate: moment().format("YYYY-MM-DD")
-                });
+async function insertRow(database, developmentApplication) {
+    console.log(developmentApplication);
+    return new Promise((resolve, reject) => {
+        let sqlStatement = database.prepare("insert or ignore into [data] values (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        sqlStatement.run([
+            developmentApplication.applicationNumber,
+            developmentApplication.address,
+            developmentApplication.reason,
+            developmentApplication.informationUrl,
+            developmentApplication.commentUrl,
+            developmentApplication.scrapeDate,
+            developmentApplication.receivedDate,
+            null,
+            null
+        ], function(error, row) {
+            if (error) {
+                console.log(error);
+                reject(error);
+            }
+            else {
+                if (this.changes > 0)
+                    console.log(`    Inserted new application \"${developmentApplication.applicationNumber}\" into the database.`);
+                sqlStatement.finalize();  // releases any locks
+                resolve(row);
             }
         });
     });
 }
 
-async function test() {
+// Parses the page at the specified URL.
+
+async function main() {
+    let database = await initializeDatabase();
     let body = await request(DevelopmentApplicationsUrl);
+
+    // Use cheerio to find all development applications listed in the page.
+
     let $ = cheerio.load(body);
-    $("table.grid td a").each((index, element) => {
+    $("table.grid td a").each(async (index, element) => {
+        // Each development application is listed with a link to another page which has the
+        // full development application details.
+
         let applicationNumber = $(element).text().trim();
-        console.log(applicationNumber);
+        if (/^[0-9][0-9][0-9]\/[0-9][0-9][0-9][0-9]\/[0-9][0-9]$/.test(applicationNumber)) {
+            let developmentApplicationUrl = "https://eproperty.mitchamcouncil.sa.gov.au/T1PRProd/WebApps/eProperty/P1/eTrack/eTrackApplicationDetails.aspx?r=P1.WEBGUEST&f=%24P1.ETR.APPDET.VIW&ApplicationId=" + encodeURIComponent(applicationNumber);
+            console.log(developmentApplicationUrl);
+            let body = await request(developmentApplicationUrl);
+
+            // Extract the details of the development application from the development application
+            // page and then insert those details into the database as a row in a table.
+
+            let $ = cheerio.load(body);
+            await insertRow(database, {
+                applicationNumber: applicationNumber,
+                address: "",
+                reason: $("td.headerColumn:contains('Description') ~ td").text().trim(),
+                informationUrl: developmentApplicationUrl,
+                commentUrl: CommentUrl,
+                scrapeDate: moment().format("YYYY-MM-DD"),
+                receivedDate: moment($("td.headerColumn:contains('Lodgement Date') ~ td").text().trim(), "D/MM/YYYY", true).format("YYYY-MM-DD"),  // allows the leading zero of the day to be omitted
+            });
+        }
     });
 }
 
-test();
-// initializeDatabase(run);
+main();
