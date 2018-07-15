@@ -56,7 +56,7 @@ async function insertRow(database, developmentApplication) {
 
 // Parses the development applications.
 
-async function main() {
+async function run() {
     // Ensure that the database exists.
 
     let database = await initializeDatabase();
@@ -139,4 +139,4 @@ async function main() {
     return null;
 }
 
-main().then(returnValue => {}).catch(error => console.error(error));
+run().then(returnValue => {}).catch(error => console.error(error));
