@@ -42,10 +42,9 @@ async function insertRow(database, developmentApplication) {
             null
         ], function(error, row) {
             if (error) {
-                console.log(error);
+                console.error(error);
                 reject(error);
-            }
-            else {
+            } else {
                 if (this.changes > 0)
                     console.log(`    Inserted new application \"${developmentApplication.applicationNumber}\" into the database.`);
                 sqlStatement.finalize();  // releases any locks
@@ -61,7 +60,6 @@ async function run() {
     try {
         // Ensure that the database exists.
 
-        console.log(moment().format("YYYY-MM-DD HH:mm:ss") + " Started.");
         let database = await initializeDatabase();
 
         // Retrieve the first page.
@@ -142,6 +140,7 @@ async function run() {
     } catch (ex) {
         console.error(ex);
     }
+    return true;
 }
 
 run();
