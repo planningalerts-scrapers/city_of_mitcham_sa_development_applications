@@ -56,7 +56,7 @@ async function insertRow(database, developmentApplication) {
 
 // Parses the development applications.
 
-async function main() {
+async function run() {
     try {
         // Ensure that the database exists.
 
@@ -143,4 +143,4 @@ async function main() {
     return true;
 }
 
-main();
+run();
