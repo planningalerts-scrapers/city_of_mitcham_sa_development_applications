@@ -7,10 +7,10 @@
 let cheerio = require("cheerio");
 let request = require("request-promise-native");
 let sqlite3 = require("sqlite3").verbose();
-let urlparser = require("url");
 let moment = require("moment");
 
 const DevelopmentApplicationsUrl = "https://eproperty.mitchamcouncil.sa.gov.au/T1PRProd/WebApps/eProperty/P1/eTrack/eTrackApplicationSearchResults.aspx?Field=S&Period=L28&r=P1.WEBGUEST&f=%24P1.ETR.SEARCH.SL28";
+const DevelopmentApplicationUrl = "https://eproperty.mitchamcouncil.sa.gov.au/T1PRProd/WebApps/eProperty/P1/eTrack/eTrackApplicationDetails.aspx?r=P1.WEBGUEST&f=%24P1.ETR.APPDET.VIW&ApplicationId=";
 const CommentUrl = "mailto:mitcham@mitchamcouncil.sa.gov.au";
 
 // Sets up an sqlite database.
@@ -28,7 +28,6 @@ async function initializeDatabase() {
 // Inserts a row in the database if it does not already exist.
 
 async function insertRow(database, developmentApplication) {
-    console.log(developmentApplication);
     return new Promise((resolve, reject) => {
         let sqlStatement = database.prepare("insert or ignore into [data] values (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         sqlStatement.run([
@@ -56,40 +55,90 @@ async function insertRow(database, developmentApplication) {
     });
 }
 
-// Parses the page at the specified URL.
+// Parses the details of the development application for the specified application number.
+
+async function parseDevelopmentApplication(database, applicationNumber) {
+    try {
+        // Check that a valid development application number was provided.
+
+        if (!/^[0-9][0-9][0-9]\/[0-9][0-9][0-9][0-9]\/[0-9][0-9]$/.test(applicationNumber))
+            return;
+
+        // Retrieve the page that contains the details of the development application.
+
+        let developmentApplicationUrl = DevelopmentApplicationUrl + encodeURIComponent(applicationNumber);
+        let body = await request(developmentApplicationUrl);
+
+        // Extract the details of the development application and insert those details into the
+        // database as a row in a table.
+
+        let $ = cheerio.load(body);
+        await insertRow(database, {
+            applicationNumber: applicationNumber,
+            address: "",
+            reason: $("td.headerColumn:contains('Description') ~ td").text().trim(),
+            informationUrl: developmentApplicationUrl,
+            commentUrl: CommentUrl,
+            scrapeDate: moment().format("YYYY-MM-DD"),
+            receivedDate: moment($("td.headerColumn:contains('Lodgement Date') ~ td").text().trim(), "D/MM/YYYY", true).format("YYYY-MM-DD"),  // allows the leading zero of the day to be omitted
+        });
+    } catch (ex) {
+        console.error(ex);
+    }
+}
+
+// Parses the development applications.
 
 async function main() {
-    let database = await initializeDatabase();
-    let body = await request(DevelopmentApplicationsUrl);
+    try {
+        // Ensure that the database exists.
 
-    // Use cheerio to find all development applications listed in the page.
+        let database = await initializeDatabase();
 
-    let $ = cheerio.load(body);
-    $("table.grid td a").each(async (index, element) => {
-        // Each development application is listed with a link to another page which has the
-        // full development application details.
+        // Retrieve the first page.
 
-        let applicationNumber = $(element).text().trim();
-        if (/^[0-9][0-9][0-9]\/[0-9][0-9][0-9][0-9]\/[0-9][0-9]$/.test(applicationNumber)) {
-            let developmentApplicationUrl = "https://eproperty.mitchamcouncil.sa.gov.au/T1PRProd/WebApps/eProperty/P1/eTrack/eTrackApplicationDetails.aspx?r=P1.WEBGUEST&f=%24P1.ETR.APPDET.VIW&ApplicationId=" + encodeURIComponent(applicationNumber);
-            console.log(developmentApplicationUrl);
-            let body = await request(developmentApplicationUrl);
+        let body = await request(DevelopmentApplicationsUrl);
+        let $ = cheerio.load(body);
 
-            // Extract the details of the development application from the development application
-            // page and then insert those details into the database as a row in a table.
+        // Examine the HTML to determine how many pages need to be retrieved.
 
-            let $ = cheerio.load(body);
-            await insertRow(database, {
-                applicationNumber: applicationNumber,
-                address: "",
-                reason: $("td.headerColumn:contains('Description') ~ td").text().trim(),
-                informationUrl: developmentApplicationUrl,
-                commentUrl: CommentUrl,
-                scrapeDate: moment().format("YYYY-MM-DD"),
-                receivedDate: moment($("td.headerColumn:contains('Lodgement Date') ~ td").text().trim(), "D/MM/YYYY", true).format("YYYY-MM-DD"),  // allows the leading zero of the day to be omitted
-            });
+        let pageCount = Math.max(1, $("tr.pagerRow td").length - 1);
+        let eventValidation = $("input[name='__EVENTVALIDATION']").val();
+        let viewState = $("input[name='__VIEWSTATE']").val();
+
+        if (pageCount === 1)
+            console.log(`There is ${pageCount} page to parse.`)
+        else
+            console.log(`There are ${pageCount} pages to parse.`)
+
+        // Process the text from each page.
+
+        for (let pageIndex = 1; pageIndex <= pageCount; pageIndex++) {
+            console.log(`Parsing page ${pageIndex} of ${pageCount}.`);
+
+            // Retrieve a subsequent page.
+
+            if (pageIndex >= 2) {
+                let body = await request.post({
+                    url: DevelopmentApplicationsUrl,
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    form: {
+                        __EVENTARGUMENT: `Page$${pageIndex}`,
+                        __EVENTTARGET: "ctl00$Content$cusResultsGrid$repWebGrid$ctl00$grdWebGridTabularView",
+                        __EVENTVALIDATION: eventValidation,
+                        __VIEWSTATE: viewState
+                }});
+                $ = cheerio.load(body);
+            }
+
+            // Use cheerio to find all development applications listed in the current page.
+
+            $("table.grid td a").each(async (index, element) => parseDevelopmentApplication(database, $(element).text().trim()));
         }
-    });
+        console.log("Complete.");
+    } catch (ex) {
+        console.error(ex);
+    }
 }
 
 main();
