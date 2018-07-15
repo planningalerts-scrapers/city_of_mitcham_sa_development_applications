@@ -119,16 +119,20 @@ async function main() {
 
                     let $ = cheerio.load(body);
                     let receivedDate = moment($("td.headerColumn:contains('Lodgement Date') ~ td").text().trim(), "D/MM/YYYY", true);  // allows the leading zero of the day to be omitted
+                    let address = $($("table.grid th:contains('Address')").parent().parent().find("tr.normalRow td")[0]).text().trim();
+                    let reason = $("td.headerColumn:contains('Description') ~ td").text().trim();  
 
-                    await insertRow(database, {
-                        applicationNumber: applicationNumber,
-                        address: $($("table.grid th:contains('Address')").parent().parent().find("tr.normalRow td")[0]).text().trim(),
-                        reason: $("td.headerColumn:contains('Description') ~ td").text().trim(),
-                        informationUrl: developmentApplicationUrl,
-                        commentUrl: CommentUrl,
-                        scrapeDate: moment().format("YYYY-MM-DD"),
-                        receivedDate: receivedDate.isValid ? receivedDate.format("YYYY-MM-DD") : ""
-                    });
+                    if (address.length > 0) {
+                        await insertRow(database, {
+                            applicationNumber: applicationNumber,
+                            address: address,
+                            reason: reason,
+                            informationUrl: developmentApplicationUrl,
+                            commentUrl: CommentUrl,
+                            scrapeDate: moment().format("YYYY-MM-DD"),
+                            receivedDate: receivedDate.isValid ? receivedDate.format("YYYY-MM-DD") : ""
+                        });
+                    }
                 } catch (ex) {
                     console.error(ex);
                 }
