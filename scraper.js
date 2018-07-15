@@ -138,7 +138,6 @@ async function main() {
                 }
             });
         }
-        console.log("Complete.");
     } catch (ex) {
         console.error(ex);
     }
