@@ -61,6 +61,7 @@ async function run() {
     try {
         // Ensure that the database exists.
 
+        console.log(moment().format("YYYY-MM-DD HH:mm:ss") + " Started.");
         let database = await initializeDatabase();
 
         // Retrieve the first page.
