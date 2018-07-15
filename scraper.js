@@ -1,5 +1,5 @@
-// Parses the development application at the South Australian City of Mitcham web site and places them
-// in a database.
+// Parses the development application at the South Australian City of Mitcham web site and places
+// them in a database.
 //
 // Michael Bone
 // 14th July 2018
@@ -72,15 +72,17 @@ async function parseDevelopmentApplication(database, applicationNumber) {
         // Extract the details of the development application and insert those details into the
         // database as a row in a table.
 
+        let receivedDate = moment($("td.headerColumn:contains('Lodgement Date') ~ td").text().trim(), "D/MM/YYYY", true);  // allows the leading zero of the day to be omitted
+
         let $ = cheerio.load(body);
         await insertRow(database, {
             applicationNumber: applicationNumber,
-            address: "",
+            address: $($("table.grid th:contains('Address')").parent().parent().find("tr.normalRow td")[0]).text().trim(),
             reason: $("td.headerColumn:contains('Description') ~ td").text().trim(),
             informationUrl: developmentApplicationUrl,
             commentUrl: CommentUrl,
             scrapeDate: moment().format("YYYY-MM-DD"),
-            receivedDate: moment($("td.headerColumn:contains('Lodgement Date') ~ td").text().trim(), "D/MM/YYYY", true).format("YYYY-MM-DD"),  // allows the leading zero of the day to be omitted
+            receivedDate: receivedDate.isValid ? receivedDate.format("YYYY-MM-DD") : ""
         });
     } catch (ex) {
         console.error(ex);
