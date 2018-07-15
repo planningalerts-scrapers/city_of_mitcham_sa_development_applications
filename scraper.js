@@ -55,40 +55,6 @@ async function insertRow(database, developmentApplication) {
     });
 }
 
-// Parses the details of the development application for the specified application number.
-
-async function parseDevelopmentApplication(database, applicationNumber) {
-    try {
-        // Check that a valid development application number was provided.
-
-        if (!/^[0-9][0-9][0-9]\/[0-9][0-9][0-9][0-9]\/[0-9][0-9]$/.test(applicationNumber))
-            return;
-
-        // Retrieve the page that contains the details of the development application.
-
-        let developmentApplicationUrl = DevelopmentApplicationUrl + encodeURIComponent(applicationNumber);
-        let body = await request(developmentApplicationUrl);
-
-        // Extract the details of the development application and insert those details into the
-        // database as a row in a table.
-
-        let receivedDate = moment($("td.headerColumn:contains('Lodgement Date') ~ td").text().trim(), "D/MM/YYYY", true);  // allows the leading zero of the day to be omitted
-
-        let $ = cheerio.load(body);
-        await insertRow(database, {
-            applicationNumber: applicationNumber,
-            address: $($("table.grid th:contains('Address')").parent().parent().find("tr.normalRow td")[0]).text().trim(),
-            reason: $("td.headerColumn:contains('Description') ~ td").text().trim(),
-            informationUrl: developmentApplicationUrl,
-            commentUrl: CommentUrl,
-            scrapeDate: moment().format("YYYY-MM-DD"),
-            receivedDate: receivedDate.isValid ? receivedDate.format("YYYY-MM-DD") : ""
-        });
-    } catch (ex) {
-        console.error(ex);
-    }
-}
-
 // Parses the development applications.
 
 async function main() {
@@ -135,7 +101,38 @@ async function main() {
 
             // Use cheerio to find all development applications listed in the current page.
 
-            $("table.grid td a").each(async (index, element) => parseDevelopmentApplication(database, $(element).text().trim()));
+            $("table.grid td a").each(async (index, element) => {
+                try {
+                    // Check that a valid development application number was provided.
+
+                    let applicationNumber = element.children[0].data.trim();
+                    if (!/^[0-9][0-9][0-9]\/[0-9][0-9][0-9][0-9]\/[0-9][0-9]$/.test(applicationNumber))
+                        return;
+
+                    // Retrieve the page that contains the details of the development application.
+
+                    let developmentApplicationUrl = DevelopmentApplicationUrl + encodeURIComponent(applicationNumber);
+                    let body = await request(developmentApplicationUrl);
+
+                    // Extract the details of the development application and insert those details into the
+                    // database as a row in a table.
+
+                    let $ = cheerio.load(body);
+                    let receivedDate = moment($("td.headerColumn:contains('Lodgement Date') ~ td").text().trim(), "D/MM/YYYY", true);  // allows the leading zero of the day to be omitted
+
+                    await insertRow(database, {
+                        applicationNumber: applicationNumber,
+                        address: $($("table.grid th:contains('Address')").parent().parent().find("tr.normalRow td")[0]).text().trim(),
+                        reason: $("td.headerColumn:contains('Description') ~ td").text().trim(),
+                        informationUrl: developmentApplicationUrl,
+                        commentUrl: CommentUrl,
+                        scrapeDate: moment().format("YYYY-MM-DD"),
+                        receivedDate: receivedDate.isValid ? receivedDate.format("YYYY-MM-DD") : ""
+                    });
+                } catch (ex) {
+                    console.error(ex);
+                }
+            });
         }
         console.log("Complete.");
     } catch (ex) {
