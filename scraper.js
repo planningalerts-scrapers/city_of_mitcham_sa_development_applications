@@ -138,4 +138,4 @@ async function main() {
     }
 }
 
-main().catch(error => console.error(error));
+main().then(() => console.log("Complete.")).catch(error => console.error(error));
