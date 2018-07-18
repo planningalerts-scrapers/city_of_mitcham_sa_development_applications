@@ -85,16 +85,22 @@ async function main() {
         // Retrieve a subsequent page.
 
         if (pageIndex >= 2) {
-            let body = await request.post({
-                url: DevelopmentApplicationsUrl,
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                form: {
-                    __EVENTARGUMENT: `Page$${pageIndex}`,
-                    __EVENTTARGET: "ctl00$Content$cusResultsGrid$repWebGrid$ctl00$grdWebGridTabularView",
-                    __EVENTVALIDATION: eventValidation,
-                    __VIEWSTATE: viewState
-            }});
-            $ = cheerio.load(body);
+            try {
+                let body = await request.post({
+                    url: DevelopmentApplicationsUrl,
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    form: {
+                        __EVENTARGUMENT: `Page$${pageIndex}`,
+                        __EVENTTARGET: "ctl00$Content$cusResultsGrid$repWebGrid$ctl00$grdWebGridTabularView",
+                        __EVENTVALIDATION: eventValidation,
+                        __VIEWSTATE: viewState
+                }});
+                $ = cheerio.load(body);
+            } catch (ex) {
+                console.log(ex);
+                console.log("Continuing to the next page.");
+                continue;
+            }
         }
 
         // Use cheerio to find all development applications listed in the current page.
@@ -109,7 +115,14 @@ async function main() {
             // Retrieve the page that contains the details of the development application.
 
             let developmentApplicationUrl = DevelopmentApplicationUrl + encodeURIComponent(applicationNumber);
-            let body = await request(developmentApplicationUrl);
+            let body = null;
+            try {
+                body = await request(developmentApplicationUrl);
+            } catch (ex) {
+                console.log(ex);
+                console.log("Continuing to the next development application.");
+                continue;
+            }
 
             // Extract the details of the development application and insert those details into the
             // database as a row in a table.
