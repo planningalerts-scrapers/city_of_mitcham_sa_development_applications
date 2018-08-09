@@ -85,56 +85,65 @@ async function main() {
         // Retrieve a subsequent page.
 
         if (pageIndex >= 2) {
-            let body = await request.post({
-                url: DevelopmentApplicationsUrl,
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                form: {
-                    __EVENTARGUMENT: `Page$${pageIndex}`,
-                    __EVENTTARGET: "ctl00$Content$cusResultsGrid$repWebGrid$ctl00$grdWebGridTabularView",
-                    __EVENTVALIDATION: eventValidation,
-                    __VIEWSTATE: viewState
-            }});
-            $ = cheerio.load(body);
+            try {
+                let body = await request.post({
+                    url: DevelopmentApplicationsUrl,
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    form: {
+                        __EVENTARGUMENT: `Page$${pageIndex}`,
+                        __EVENTTARGET: "ctl00$Content$cusResultsGrid$repWebGrid$ctl00$grdWebGridTabularView",
+                        __EVENTVALIDATION: eventValidation,
+                        __VIEWSTATE: viewState
+                }});
+                $ = cheerio.load(body);
+            } catch (ex) {
+                console.log(ex);
+                console.log("Continuing to the next page.");
+                continue;
+            }
         }
 
         // Use cheerio to find all development applications listed in the current page.
 
-        $("table.grid td a").each(async (index, element) => {
+        for (let element of $("table.grid td a").get()) {
+            // Check that a valid development application number was provided.
+
+            let applicationNumber = element.children[0].data.trim();
+            if (!/^[0-9][0-9][0-9]\/[0-9][0-9][0-9][0-9]\/[0-9][0-9]$/.test(applicationNumber))
+                continue;
+
+            // Retrieve the page that contains the details of the development application.
+
+            let developmentApplicationUrl = DevelopmentApplicationUrl + encodeURIComponent(applicationNumber);
+            let body = null;
             try {
-                // Check that a valid development application number was provided.
-
-                let applicationNumber = element.children[0].data.trim();
-                if (!/^[0-9][0-9][0-9]\/[0-9][0-9][0-9][0-9]\/[0-9][0-9]$/.test(applicationNumber))
-                    return;
-
-                // Retrieve the page that contains the details of the development application.
-
-                let developmentApplicationUrl = DevelopmentApplicationUrl + encodeURIComponent(applicationNumber);
-                let body = await request(developmentApplicationUrl);
-
-                // Extract the details of the development application and insert those details into the
-                // database as a row in a table.
-
-                let $ = cheerio.load(body);
-                let receivedDate = moment($("td.headerColumn:contains('Lodgement Date') ~ td").text().trim(), "D/MM/YYYY", true);  // allows the leading zero of the day to be omitted
-                let address = $($("table.grid th:contains('Address')").parent().parent().find("tr.normalRow td")[0]).text().trim();
-                let reason = $("td.headerColumn:contains('Description') ~ td").text().trim();  
-
-                if (address.length > 0) {
-                    await insertRow(database, {
-                        applicationNumber: applicationNumber,
-                        address: address,
-                        reason: reason,
-                        informationUrl: developmentApplicationUrl,
-                        commentUrl: CommentUrl,
-                        scrapeDate: moment().format("YYYY-MM-DD"),
-                        receivedDate: receivedDate.isValid ? receivedDate.format("YYYY-MM-DD") : ""
-                    });
-                }
+                body = await request(developmentApplicationUrl);
             } catch (ex) {
-                console.error(ex);
+                console.log(ex);
+                console.log("Continuing to the next development application.");
+                continue;
             }
-        });
+
+            // Extract the details of the development application and insert those details into the
+            // database as a row in a table.
+
+            let $ = cheerio.load(body);
+            let receivedDate = moment($("td.headerColumn:contains('Lodgement Date') ~ td").text().trim(), "D/MM/YYYY", true);  // allows the leading zero of the day to be omitted
+            let address = $($("table.grid th:contains('Address')").parent().parent().find("tr.normalRow td")[0]).text().trim();
+            let reason = $("td.headerColumn:contains('Description') ~ td").text().trim();  
+
+            if (address.length > 0) {
+                await insertRow(database, {
+                    applicationNumber: applicationNumber,
+                    address: address,
+                    reason: reason,
+                    informationUrl: developmentApplicationUrl,
+                    commentUrl: CommentUrl,
+                    scrapeDate: moment().format("YYYY-MM-DD"),
+                    receivedDate: receivedDate.isValid ? receivedDate.format("YYYY-MM-DD") : ""
+                });
+            }
+        }
     }
 }
 
