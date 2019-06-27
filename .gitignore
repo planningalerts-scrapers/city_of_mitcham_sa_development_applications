@@ -1,12 +1,2 @@
 # Ignore output of scraper.
 data.sqlite
-
-# Ignore dependency cache.
-node_modules
-package-lock.json
-
-# Ignore Visual Studio Code files.
-.vscode
-
-results_other.yml
-results_ruby.yml
