@@ -1,1 +1,1 @@
-This is a scraper that runs on [Morph](https://morph.io).  It scrapes lodged development applications from the South Australian [City of Mitcham web site](https://www.mitchamcouncil.sa.gov.au).
+This scraper has been merged in to https://morph.io/planningalerts-scrapers/multiple_technology_one (mitcham)
